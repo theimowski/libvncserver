@@ -100,7 +100,7 @@ endif(WITH_PNG)
 
 
 if(WITH_SDL)
-  find_package(SDL2)
+  find_package(sdl2)
 endif(WITH_SDL)
 
 
@@ -494,13 +494,13 @@ set(LIBVNCCLIENT_EXAMPLES
     ppmtest
 )
 
-if(SDL2_FOUND)
-  include_directories(${SDL2_INCLUDE_DIR})
+if(sdl2_FOUND)
+  include_directories(${SDL2_INCLUDE_DIRS})
   set(LIBVNCCLIENT_EXAMPLES
     ${LIBVNCCLIENT_EXAMPLES}
     SDLvncviewer
   )
-endif(SDL2_FOUND)
+endif(sdl2_FOUND)
 
 if(FFMPEG_FOUND)
   set(LIBVNCCLIENT_EXAMPLES
@@ -523,7 +523,7 @@ foreach(e ${LIBVNCCLIENT_EXAMPLES})
   add_executable(client_examples_${e} ${LIBVNCCLIEXAMPLE_DIR}/${e}.c ${LIBVNCCLIEXAMPLE_DIR}/${${e}_EXTRA_SOURCES} )
   set_target_properties(client_examples_${e} PROPERTIES OUTPUT_NAME ${e})
   set_target_properties(client_examples_${e} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/client_examples)
-  target_link_libraries(client_examples_${e} vncclient ${CMAKE_THREAD_LIBS_INIT} ${SDL2_LIBRARY} ${FFMPEG_LIBRARIES})
+  target_link_libraries(client_examples_${e} vncclient ${CMAKE_THREAD_LIBS_INIT} ${SDL2_LIBRARIES} ${FFMPEG_LIBRARIES})
 endforeach(e ${LIBVNCCLIENT_EXAMPLES})
 
 

@@ -54,6 +54,7 @@ extern "C"
 
 #ifdef WIN32
 #undef SOCKET
+#include <basetsd.h>
 typedef UINT32 in_addr_t;
 #include <winsock2.h>
 #ifdef LIBVNCSERVER_HAVE_WS2TCPIP_H

@@ -1,30 +1,32 @@
 language: c
-dist: trusty
+dist: xenial
 sudo: required
 
 os:
   - linux
   - osx
 
-compiler:
-  - gcc
-  - clang
+env:
+  - CMAKE_OPTIONS="-DWITH_OPENSSL=ON  -DWITH_GNUTLS=OFF -DWITH_GCRYPT=OFF" # build with OpenSSL
+  - CMAKE_OPTIONS="-DWITH_OPENSSL=OFF -DWITH_GNUTLS=ON  -DWITH_GCRYPT=ON"  # build with GnuTLS and Libgrypt
+  - CMAKE_OPTIONS="-DWITH_OPENSSL=OFF -DWITH_GNUTLS=OFF -DWITH_GCRYPT=OFF" # build without external encryption libraries
+  - CMAKE_OPTIONS="-DCMAKE_TOOLCHAIN_FILE=../cmake/Toolchain-cross-mingw32-linux.cmake" # crosscompile with MinGW toolchain
+
+jobs:
+  exclude:
+    - os: osx
+      env: CMAKE_OPTIONS="-DCMAKE_TOOLCHAIN_FILE=../cmake/Toolchain-cross-mingw32-linux.cmake" # don't test MinGW from OSX
 
 before_install:
-- |
-  if [[ "${TRAVIS_OS_NAME}" == "linux" ]]; then
-    CMAKE_URL="http://www.cmake.org/files/v3.7/cmake-3.7.2-Linux-x86_64.tar.gz"
-    mkdir -p ${TRAVIS_BUILD_DIR}/deps/cmake && travis_retry wget --quiet -O - ${CMAKE_URL} | tar --strip-components=1 -xz -C ${TRAVIS_BUILD_DIR}/deps/cmake
-    export PATH=${TRAVIS_BUILD_DIR}/deps/cmake/bin:${PATH}
-  fi
+  - if [ "$TRAVIS_OS_NAME" = "linux" ]; then sudo apt-get update; sudo apt-get --no-install-suggests --no-install-recommends install libsdl2-dev liblzo2-dev gnutls-dev libgcrypt-dev wine; fi
+  - if [ "$TRAVIS_OS_NAME" = "osx" ]; then brew update; brew install sdl2 lzo; fi
 
-# Build steps
 script:
   - mkdir build
   - cd build
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo apt-get update; sudo apt-get --no-install-suggests --no-install-recommends install libsdl2-dev; fi
-  - if [[ "${TRAVIS_OS_NAME}" == "osx" ]]; then brew update; brew install sdl2; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cmake .. -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl; else cmake ..; fi
+  - if [ "$TRAVIS_OS_NAME" = "linux" ]; then cmake $CMAKE_OPTIONS .. ; fi
+  - if [ "$TRAVIS_OS_NAME" = "osx" ]; then cmake $CMAKE_OPTIONS -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl .. ; fi
   - cmake --build .
+  - cp /usr/i686-w64-mingw32/lib/libwinpthread-1.dll test/ || true # used only for MinGW tests, ok to fail for other cases
   - ctest --output-on-failure
 

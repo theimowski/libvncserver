@@ -26,7 +26,7 @@
 #ifndef FILE_TRANSFER_MSG_H
 #define FILE_TRANSFER_MSG_H
 
-#ifdef _MSC_VER
+#ifdef WIN32
 #pragma push_macro("CreateDirectory")
 #undef CreateDirectory /* Prevent macro clashes under Windows */
 #endif /* _MSC_VER */
@@ -51,7 +51,8 @@ FileTransferMsg ChkFileUploadWriteErr(rfbClientPtr cl, rfbTightClientPtr data, c
 
 void CreateDirectory(char* dirName);
 void FileUpdateComplete(rfbClientPtr cl, rfbTightClientPtr data);
-void CloseUndoneFileTransfer(rfbClientPtr cl, rfbTightClientPtr data);
+void CloseUndoneFileUpload(rfbClientPtr cl, rfbTightClientPtr data);
+void CloseUndoneFileDownload(rfbClientPtr cl, rfbTightClientPtr data);
 
 void FreeFileTransferMsg(FileTransferMsg ftm);
 

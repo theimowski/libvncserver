@@ -178,7 +178,8 @@ int decomptest(unsigned char *srcbuf, unsigned char **jpegbuf,
 					int y=(int)((double)srcbuf[rindex]*0.299
 						+ (double)srcbuf[gindex]*0.587
 						+ (double)srcbuf[bindex]*0.114 + 0.5);
-					if(y>255) y=255;  if(y<0) y=0;
+					if(y>255) y=255;
+					if(y<0) y=0;
 					dstbuf[rindex]=abs(dstbuf[rindex]-y);
 					dstbuf[gindex]=abs(dstbuf[gindex]-y);
 					dstbuf[bindex]=abs(dstbuf[bindex]-y);
@@ -226,7 +227,8 @@ void dotest(unsigned char *srcbuf, int w, int h, int subsamp, int jpegqual,
 
 	for(tilew=dotile? 8:w, tileh=dotile? 8:h; ; tilew*=2, tileh*=2)
 	{
-		if(tilew>w) tilew=w;  if(tileh>h) tileh=h;
+		if(tilew>w) tilew=w;
+		if(tileh>h) tileh=h;
 		ntilesw=(w+tilew-1)/tilew;  ntilesh=(h+tileh-1)/tileh;
 
 		if((jpegbuf=(unsigned char **)malloc(sizeof(unsigned char *)
@@ -323,7 +325,7 @@ void dotest(unsigned char *srcbuf, int w, int h, int subsamp, int jpegqual,
 
 		for(i=0; i<ntilesw*ntilesh; i++)
 		{
-			if(jpegbuf[i]) free(jpegbuf[i]);  jpegbuf[i]=NULL;
+			if(jpegbuf[i]) {free(jpegbuf[i]); jpegbuf[i]=NULL;}
 		}
 		free(jpegbuf);  jpegbuf=NULL;
 		free(jpegsize);  jpegsize=NULL;
@@ -337,7 +339,7 @@ void dotest(unsigned char *srcbuf, int w, int h, int subsamp, int jpegqual,
 	{
 		for(i=0; i<ntilesw*ntilesh; i++)
 		{
-			if(jpegbuf[i]) free(jpegbuf[i]);  jpegbuf[i]=NULL;
+			if(jpegbuf[i]) {free(jpegbuf[i]); jpegbuf[i]=NULL;}
 		}
 		free(jpegbuf);  jpegbuf=NULL;
 	}
@@ -392,7 +394,8 @@ void dodecomptest(char *filename)
 
 	for(tilew=dotile? 16:w, tileh=dotile? 16:h; ; tilew*=2, tileh*=2)
 	{
-		if(tilew>w) tilew=w;  if(tileh>h) tileh=h;
+		if(tilew>w) tilew=w;
+		if(tileh>h) tileh=h;
 		ntilesw=(w+tilew-1)/tilew;  ntilesh=(h+tileh-1)/tileh;
 
 		if((jpegbuf=(unsigned char **)malloc(sizeof(unsigned char *)
@@ -455,7 +458,7 @@ void dodecomptest(char *filename)
 	{
 		for(i=0; i<ntilesw*ntilesh; i++)
 		{
-			if(jpegbuf[i]) free(jpegbuf[i]);  jpegbuf[i]=NULL;
+			if(jpegbuf[i]) {free(jpegbuf[i]);  jpegbuf[i]=NULL;}
 		}
 		free(jpegbuf);  jpegbuf=NULL;
 	}
@@ -507,7 +510,7 @@ void usage(char *progname)
 
 int main(int argc, char *argv[])
 {
-	unsigned char *srcbuf=NULL;  int w, h, i, j;
+	unsigned char *srcbuf=NULL;  int w = 0, h = 0, i, j;
 	int minqual=-1, maxqual=-1;  char *temp;
 	int minarg=2;  int retval=0;
 
@@ -599,7 +602,7 @@ int main(int argc, char *argv[])
 				}
 				else usage(argv[0]);
 			}
-			if(!strcasecmp(argv[i], "-benchtime") && i<argc-1)
+			if(i<argc-1 && !strcasecmp(argv[i], "-benchtime"))
 			{
 				double temp=atof(argv[++i]);
 				if(temp>0.0) benchtime=temp;

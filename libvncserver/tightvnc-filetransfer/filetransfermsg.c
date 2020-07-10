@@ -32,6 +32,7 @@
 #include <io.h>
 #include <direct.h>
 #include <sys/utime.h>
+#define mkdir(path, perms) _mkdir(path) /* Match POSIX signature */
 #ifdef _MSC_VER
 #define S_ISREG(m)	(((m) & _S_IFMT) == _S_IFREG)
 #define S_ISDIR(m)	(((m) & S_IFDIR) == S_IFDIR)
@@ -41,7 +42,6 @@
 #define S_IROTH		0x0000004
 #define S_IWGRP		0x0000010
 #define S_IRGRP		0x0000020
-#define mkdir(path, perms) _mkdir(path) /* Match POSIX signature */
 /* Prevent POSIX deprecation warnings on MSVC */
 #define creat _creat
 #define open _open
@@ -632,8 +632,7 @@ ChkFileUploadErr(rfbClientPtr cl, rfbTightClientPtr rtcp)
     FileTransferMsg fileUploadErrMsg;
 
 	memset(&fileUploadErrMsg, 0, sizeof(FileTransferMsg));
-	if( (rtcp->rcft.rcfu.fName == NULL) ||
-		(strlen(rtcp->rcft.rcfu.fName) == 0) ||
+	if((strlen(rtcp->rcft.rcfu.fName) == 0) ||
 		((rtcp->rcft.rcfu.uploadFD = creat(rtcp->rcft.rcfu.fName, 
 		S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)) == -1)) {
 
@@ -672,7 +671,7 @@ ChkFileUploadWriteErr(rfbClientPtr cl, rfbTightClientPtr rtcp, char* pBuf)
 		char reason[] = "Error writing file data";
 		int reasonLen = strlen(reason);
 		ftm = CreateFileUploadErrMsg(reason, reasonLen);
-		CloseUndoneFileTransfer(cl, rtcp);
+		CloseUndoneFileUpload(cl, rtcp);
 	}		
 	return ftm;
 }
@@ -735,7 +734,7 @@ CreateFileUploadErrMsg(char* reason, unsigned int reasonLen)
  ******************************************************************************/
 
 void
-CloseUndoneFileTransfer(rfbClientPtr cl, rfbTightClientPtr rtcp)
+CloseUndoneFileUpload(rfbClientPtr cl, rfbTightClientPtr rtcp)
 {
 	/* TODO :: File Upload case is not handled currently */
 	/* TODO :: In case of concurrency we need to use Critical Section */
@@ -759,9 +758,19 @@ CloseUndoneFileTransfer(rfbClientPtr cl, rfbTightClientPtr rtcp)
 
 		memset(rtcp->rcft.rcfu.fName, 0 , PATH_MAX);
 	}
+}
+
+
+void
+CloseUndoneFileDownload(rfbClientPtr cl, rfbTightClientPtr rtcp)
+{
+	if(cl == NULL)
+		return;
 	
 	if(rtcp->rcft.rcfd.downloadInProgress == TRUE) {
 		rtcp->rcft.rcfd.downloadInProgress = FALSE;
+		/* the thread will return if downloadInProgress is FALSE */
+		pthread_join(rtcp->rcft.rcfd.downloadThread, NULL);
 
 		if(rtcp->rcft.rcfd.downloadFD != -1) {			
 			close(rtcp->rcft.rcfd.downloadFD);

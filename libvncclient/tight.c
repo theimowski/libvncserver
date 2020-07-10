@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2017 D. R. Commander.  All Rights Reserved.
+ *  Copyright (C) 2017, 2019 D. R. Commander.  All Rights Reserved.
  *  Copyright (C) 2004-2008 Sun Microsystems, Inc.  All Rights Reserved.
  *  Copyright (C) 2004 Landmark Graphics Corporation.  All Rights Reserved.
  *  Copyright (C) 2000, 2001 Const Kaplinsky.  All Rights Reserved.
@@ -22,6 +22,8 @@
 
 #ifdef LIBVNCSERVER_HAVE_LIBZ
 #ifdef LIBVNCSERVER_HAVE_LIBJPEG
+
+#include "turbojpeg.h"
 
 /*
  * tight.c - handle ``tight'' encoding.
@@ -358,7 +360,8 @@ FilterCopyBPP (rfbClient* client, int srcx, int srcy, int numRows)
 #endif
 
   for (y = 0; y < numRows; y++)
-    memcpy (&dst[y*client->width], &client->buffer[y*client->rectWidth],
+    memcpy (&dst[y*client->width],
+            &client->buffer[y * client->rectWidth * (BPP / 8)],
             client->rectWidth * (BPP / 8));
 }
 

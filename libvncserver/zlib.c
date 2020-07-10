@@ -45,10 +45,11 @@
  * tight.  N.B. ZRLE does it the traditional way with per-client storage
  * (and so at least ZRLE will work threaded on older systems.)
  */
-#if LIBVNCSERVER_HAVE_LIBPTHREAD && LIBVNCSERVER_HAVE_TLS && !defined(TLS) && defined(__linux__)
+#if defined(__GNUC__)
 #define TLS __thread
-#endif
-#ifndef TLS
+#elif defined(_MSC_VER)
+#define TLS __declspec(thread)
+#else
 #define TLS
 #endif
 
@@ -98,12 +99,16 @@ rfbSendOneRectEncodingZlib(rfbClientPtr cl,
     maxRawSize = (cl->scaledScreen->width * cl->scaledScreen->height
                   * (cl->format.bitsPerPixel / 8));
 
-    if (zlibBeforeBufSize < maxRawSize) {
-	zlibBeforeBufSize = maxRawSize;
-	if (zlibBeforeBuf == NULL)
-	    zlibBeforeBuf = (char *)malloc(zlibBeforeBufSize);
-	else
-	    zlibBeforeBuf = (char *)realloc(zlibBeforeBuf, zlibBeforeBufSize);
+    if (!zlibBeforeBuf || zlibBeforeBufSize < maxRawSize) {
+        if (zlibBeforeBuf == NULL)
+            zlibBeforeBuf = (char *)malloc(maxRawSize);
+        else {
+            char *reallocedBeforeEncBuf = (char *)realloc(zlibBeforeBuf, maxRawSize);
+            if (!reallocedBeforeEncBuf) return FALSE;
+            zlibBeforeBuf = reallocedBeforeEncBuf;
+        }
+        if(zlibBeforeBuf)
+            zlibBeforeBufSize = maxRawSize;
     }
 
     /* zlib compression is not useful for very small data sets.
@@ -138,14 +143,23 @@ rfbSendOneRectEncodingZlib(rfbClientPtr cl,
      */
     maxCompSize = maxRawSize + (( maxRawSize + 99 ) / 100 ) + 12;
 
-    if (zlibAfterBufSize < maxCompSize) {
-	zlibAfterBufSize = maxCompSize;
-	if (zlibAfterBuf == NULL)
-	    zlibAfterBuf = (char *)malloc(zlibAfterBufSize);
-	else
-	    zlibAfterBuf = (char *)realloc(zlibAfterBuf, zlibAfterBufSize);
+    if (!zlibAfterBuf || zlibAfterBufSize < maxCompSize) {
+        if (zlibAfterBuf == NULL)
+            zlibAfterBuf = (char *)malloc(maxCompSize);
+        else {
+            char *reallocedAfterEncBuf = (char *)realloc(zlibAfterBuf, maxCompSize);
+            if (!reallocedAfterEncBuf) return FALSE;
+            zlibAfterBuf = reallocedAfterEncBuf;
+        }
+        if(zlibAfterBuf)
+            zlibAfterBufSize = maxCompSize;
     }
 
+    if (!zlibBeforeBuf || !zlibAfterBuf)
+    {
+        rfbLog("rfbSendOneRectEncodingZlib: failed to allocate memory\n");
+        return FALSE;
+    }
 
     /* 
      * Convert pixel data to client format.

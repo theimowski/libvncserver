@@ -21,10 +21,8 @@
  * Email ID	: rokumar@novell.com
  * Date		: 14th July 2005
  */
- 
-#ifndef _MSC_VER
-#include <pwd.h>
-#endif /* _MSC_VER */
+
+#include <rfb/rfbconfig.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,10 +30,12 @@
 #if LIBVNCSERVER_HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-#ifndef _MSC_VER
+#if LIBVNCSERVER_HAVE_DIRENT_H
 #include <dirent.h>
+#endif
+#ifndef WIN32
 #include <pthread.h>
-#endif /* _MSC_VER */
+#endif /* WIN32 */
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <limits.h>
@@ -45,12 +45,19 @@
 #include "filetransfermsg.h"
 #include "handlefiletransferrequest.h"
 
+#ifdef WIN32
+typedef unsigned int uid_t;
+#include <shlobj.h>
+#else
+#include <pwd.h>
+#endif /* WIN32 */
 
-pthread_mutex_t fileDownloadMutex = PTHREAD_MUTEX_INITIALIZER;
 
-rfbBool fileTransferEnabled = TRUE;
-rfbBool fileTransferInitted = FALSE;
-char ftproot[PATH_MAX];
+static pthread_mutex_t fileDownloadMutex = PTHREAD_MUTEX_INITIALIZER;
+
+static rfbBool fileTransferEnabled = TRUE;
+static rfbBool fileTransferInitted = FALSE;
+static char ftproot[PATH_MAX];
 
 
 /******************************************************************************
@@ -73,7 +80,11 @@ void
 InitFileTransfer()
 {
 	char* userHome = NULL;
+#ifdef WIN32
+	uid_t uid = 0;
+#else
 	uid_t uid = geteuid();
+#endif
 
 	if(fileTransferInitted)
 		return;
@@ -160,8 +171,23 @@ SetFtpRoot(char* path)
 char* 
 GetHomeDir(uid_t uid)
 {
-	struct passwd *pwEnt = NULL;
 	char *homedir = NULL;
+#ifdef WIN32
+    PWSTR profileDir = NULL;
+    if (SHGetKnownFolderPath(&FOLDERID_Profile, 0, NULL, &profileDir) != S_OK)
+    {
+        return NULL;
+    }
+
+	int homedirlen = WideCharToMultiByte(CP_UTF8, 0, profileDir, -1, homedir, 0, NULL, NULL);
+	if (homedirlen<=0 || (homedir = malloc(homedirlen)) == NULL)
+	{
+		return NULL;
+	}
+	WideCharToMultiByte(CP_UTF8, 0, profileDir, -1, homedir, homedirlen, NULL, NULL);
+	CoTaskMemFree(profileDir);
+#else
+	struct passwd *pwEnt = NULL;
 
 	pwEnt = getpwuid (uid);
 	if (pwEnt == NULL)
@@ -170,6 +196,7 @@ GetHomeDir(uid_t uid)
 	if(pwEnt->pw_dir != NULL) {
 		homedir = strdup (pwEnt->pw_dir);
 	}
+#endif
 
 	return homedir;
 }
@@ -489,12 +516,6 @@ RunFileDownloadThread(void* client)
 			if(rfbWriteExact(cl, fileDownloadMsg.data, fileDownloadMsg.length) < 0)  {
 				rfbLog("File [%s]: Method [%s]: Error while writing to socket \n"
 						, __FILE__, __FUNCTION__);
-
-				if(cl != NULL) {
-			    	rfbCloseClient(cl);
-				CloseUndoneFileTransfer(cl, rtcp);
-				}
-				
 				FreeFileTransferMsg(fileDownloadMsg);
 				return NULL;
 			}
@@ -508,7 +529,6 @@ RunFileDownloadThread(void* client)
 void
 HandleFileDownload(rfbClientPtr cl, rfbTightClientPtr rtcp)
 {
-	pthread_t fileDownloadThread;
 	FileTransferMsg fileDownloadMsg;
 	
 	memset(&fileDownloadMsg, 0, sizeof(FileTransferMsg));
@@ -518,10 +538,9 @@ HandleFileDownload(rfbClientPtr cl, rfbTightClientPtr rtcp)
 		FreeFileTransferMsg(fileDownloadMsg);
 		return;
 	}
-	rtcp->rcft.rcfd.downloadInProgress = FALSE;
-	rtcp->rcft.rcfd.downloadFD = -1;
+	CloseUndoneFileDownload(cl, rtcp);
 
-	if(pthread_create(&fileDownloadThread, NULL, RunFileDownloadThread, (void*) 
+	if(pthread_create(&rtcp->rcft.rcfd.downloadThread, NULL, RunFileDownloadThread, (void*)
 	cl) != 0) {
 		FileTransferMsg ftm = GetFileDownLoadErrMsg();
 		
@@ -585,13 +604,15 @@ HandleFileDownloadCancelRequest(rfbClientPtr cl, rfbTightClientPtr rtcp)
 					"FileDownloadCancelMsg\n", __FILE__, __FUNCTION__);
 		
 	    rfbCloseClient(cl);
+	    free(reason);
+	    return;
 	}
 
 	rfbLog("File [%s]: Method [%s]: File Download Cancel Request received:"
 					" reason <%s>\n", __FILE__, __FUNCTION__, reason);
 	
 	pthread_mutex_lock(&fileDownloadMutex);
-	CloseUndoneFileTransfer(cl, rtcp);
+	CloseUndoneFileDownload(cl, rtcp);
 	pthread_mutex_unlock(&fileDownloadMutex);
 	
 	if(reason != NULL) {
@@ -834,7 +855,7 @@ HandleFileUploadDataRequest(rfbClientPtr cl, rfbTightClientPtr rtcp)
 			FreeFileTransferMsg(ftm);
 		}
 
-		CloseUndoneFileTransfer(cl, rtcp);
+		CloseUndoneFileUpload(cl, rtcp);
 
 	    if(pBuf != NULL) {
 	    	free(pBuf);
@@ -934,7 +955,7 @@ HandleFileUploadFailedRequest(rfbClientPtr cl, rfbTightClientPtr rtcp)
 	rfbLog("File [%s]: Method [%s]: File Upload Failed Request received:"
 				" reason <%s>\n", __FILE__, __FUNCTION__, reason);
 
-	CloseUndoneFileTransfer(cl, rtcp);
+	CloseUndoneFileUpload(cl, rtcp);
 
 	if(reason != NULL) {
 		free(reason);
@@ -977,7 +998,13 @@ HandleFileCreateDirRequest(rfbClientPtr cl, rfbTightClientPtr rtcp)
 
 	msg.fcdr.dNameLen = Swap16IfLE(msg.fcdr.dNameLen);
 
-	/* TODO :: chk if the dNameLen is greater than PATH_MAX */	
+	/* chk if the dNameLen is greater than PATH_MAX */
+	if(msg.fcdr.dNameLen >= sizeof(dirName)-1) {
+	    rfbLog("File [%s]: Method [%s]: Error directory name is too long.\n",
+	            __FILE__, __FUNCTION__);
+	    rfbCloseClient(cl);
+	    return;
+	}
 	
 	if((n = rfbReadExact(cl, dirName, msg.fcdr.dNameLen)) <= 0) {
 		

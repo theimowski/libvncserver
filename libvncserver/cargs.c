@@ -43,6 +43,10 @@ rfbUsage(void)
                                                              "new non-shared\n"
                     "                       connection comes in (refuse new connection "
                                                                 "instead)\n");
+#ifdef LIBVNCSERVER_WITH_WEBSOCKETS
+    fprintf(stderr, "-sslkeyfile path       set path to private key file for encrypted WebSockets connections\n");
+    fprintf(stderr, "-sslcertfile path      set path to certificate file for encrypted WebSockets connections\n");
+#endif
     fprintf(stderr, "-httpdir dir-path      enable http server using dir-path home\n");
     fprintf(stderr, "-httpport portnum      use portnum for http connection\n");
 #ifdef LIBVNCSERVER_IPv6
@@ -121,8 +125,9 @@ rfbProcessArguments(rfbScreenInfoPtr rfbScreen,int* argc, char *argv[])
 	    sscanf(argv[++i],"%d.%d", &rfbScreen->protocolMajorVersion, &rfbScreen->protocolMinorVersion);
 	} else if (strcmp(argv[i], "-passwd") == 0) {  /* -passwd password */
 	    char **passwds = malloc(sizeof(char**)*2);
-	    if (i + 1 >= *argc) {
+	    if (!passwds || i + 1 >= *argc) {
 		rfbUsage();
+		free(passwds);
 		return FALSE;
 	    }
 	    passwds[0] = argv[++i];
